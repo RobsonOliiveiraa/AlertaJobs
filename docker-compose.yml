@@ -1,10 +1,10 @@
-version: "3.8"
+# Stack: AlertaJobs
 name: "AlertaJobs"
 
 services:
   redis:
     image: redis:7-alpine
-    container_name: alerta-redis
+    # container_name: alerta-redis   # (opcional) descomente se quiser nome fixo
     command: ["redis-server","--save","60","1000","--loglevel","warning"]
     volumes:
       - redis_data:/data
@@ -22,18 +22,18 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: alerta-postgres
+    # container_name: alerta-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-n8n}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeThis!123}
+      POSTGRES_DB: ${POSTGRES_DB:-n8n}
       TZ: America/Sao_Paulo
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks: [app_net]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER:-n8n} -d ${POSTGRES_DB:-n8n}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -44,26 +44,30 @@ services:
 
   n8n:
     image: n8nio/n8n:latest
-    container_name: alerta-n8n
+    # container_name: alerta-n8n
     ports:
-      - "5678:5678"    # opcional: use proxy/HTTPS depois
+      - "5678:5678"    # depois coloque proxy + HTTPS e feche esta porta
     environment:
+      # Banco (Postgres)
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-n8n}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-n8n}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-ChangeThis!123}
 
+      # Fila (Redis/Bull)
       QUEUE_BULL_REDIS_HOST: redis
       QUEUE_BULL_REDIS_PORT: 6379
 
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      N8N_HOST: ${N8N_HOST}
+      # Segurança/URLs
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-please-change-this-key}
+      N8N_HOST: ${N8N_HOST:-localhost}
       N8N_PORT: 5678
-      WEBHOOK_URL: ${WEBHOOK_URL}
-      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost/}
 
+      # Locale
       GENERIC_TIMEZONE: America/Sao_Paulo
       TZ: America/Sao_Paulo
       NODE_ENV: production
@@ -79,6 +83,7 @@ services:
     restart: unless-stopped
     mem_limit: 1536m
     healthcheck:
+      # página HTML raiz é suficiente para checar se o servidor respondeu
       test: ["CMD-SHELL","wget -qO- http://localhost:5678/ | head -n1 >/dev/null 2>&1 || exit 1"]
       interval: 20s
       timeout: 5s
@@ -89,19 +94,20 @@ services:
 
   waha:
     image: devlikeapro/whatsapp-http-api:latest
-    container_name: alerta-waha
+    # container_name: alerta-waha
     ports:
-      - "3000:3000"   # opcional: proteja com API key/proxy
+      - "3000:3000"   # proteja com API key ou proxy quando for público
     environment:
       TZ: America/Sao_Paulo
-      # API_KEY: ${WAHA_API_KEY}
+      # API_KEY: ${WAHA_API_KEY:-changeThisApiKey}   # opcional
     volumes:
       - waha_sessions:/sessions
     networks: [app_net]
     restart: unless-stopped
     mem_limit: 2048m
     healthcheck:
-      test: ["CMD","wget","-qO-","http://localhost:3000/health"]
+      # usa a raiz (200 OK) para não depender de endpoints exclusivos da versão Plus
+      test: ["CMD-SHELL","wget -qO- http://localhost:3000/ >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20
