@@ -1,6 +1,18 @@
 # AlertaJobs - Compose auto-contido (sem variáveis externas)
 
 services:
+  # Serviço do seu site HTML
+  alerta-jobs-web:
+    image: nginx:alpine
+    container_name: alerta-jobs-web
+    volumes:
+      - ./subscribe.html:/usr/share/nginx/html/index.html
+    ports:
+      - "80:80"  # Mapeia a porta 80 da VPS para o container
+    networks:
+      - app_net
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     command: ["redis-server","--save","60","1000","--loglevel","warning"]
@@ -22,7 +34,7 @@ services:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: n8n
-      POSTGRES_PASSWORD: ChangeThis!123     # <<< TROQUE DEPOIS
+      POSTGRES_PASSWORD: ChangeThis!123       # <<< TROQUE DEPOIS
       POSTGRES_DB: n8n
       TZ: America/Sao_Paulo
     volumes:
@@ -42,7 +54,7 @@ services:
   n8n:
     image: n8nio/n8n:latest
     ports:
-      - "5678:5678"   # depois coloque proxy + HTTPS e feche esta porta
+      - "5678:5678"    # depois coloque proxy + HTTPS e feche esta porta
     environment:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
@@ -89,7 +101,7 @@ services:
       - "3000:3000"
     environment:
       TZ: America/Sao_Paulo
-      # API_KEY: changeThisApiKey   # opcional: ative e exija header X-Api-Key
+      # API_KEY: changeThisApiKey    # opcional: ative e exija header X-Api-Key
     volumes:
       - waha_sessions:/sessions
     networks: [app_net]
