@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Assinar – AlertaJobs</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+    form{max-width:520px;width:100%;background:#111827;padding:24px;border-radius:16px;box-shadow:0 10px 30px #0006}
+    h1{margin:0 0 12px;font-size:22px}
+    p{margin:0 0 16px;color:#93c5fd}
+    label{display:block;margin-top:12px;font-size:14px}
+    input,textarea,select{width:100%;padding:12px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:#e2e8f0;margin-top:6px}
+    .row{display:flex;gap:12px}
+    .row>div{flex:1}
+    .hint{font-size:12px;color:#94a3b8}
+    .checkbox{display:flex;gap:8px;align-items:center;margin-top:10px}
+    button{margin-top:18px;width:100%;padding:12px;border:0;border-radius:12px;background:#6366f1;color:white;font-weight:600;cursor:pointer}
+    button:hover{filter:brightness(1.1)}
+    .hp{display:none} /* honeypot */
+  </style>
+</head>
+<body>
+  <form method="POST" action="http://72.60.56.138:5678/webhook-test/subscribe">
+    <h1>Assine o AlertaJobs</h1>
+    <p>Receba no WhatsApp vagas recentes do Indeed, filtradas por palavras-chave e localidade.</p>
+
+    <label>
+      WhatsApp (apenas números)
+      <input name="phone" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="11987654321" required />
+      <div class="hint">Coloque DDD. O +55 será adicionado automaticamente.</div>
+    </label>
+
+    <label>
+      Palavras-chave
+      <input name="keywords" type="text" placeholder="ex.: python, jr, remoto" />
+      <div class="hint">Separe por vírgula ou ponto e vírgula.</div>
+    </label>
+
+    <div class="row">
+      <div>
+        <label>
+          Estado
+          <select id="estado" name="estado" required>
+            <option value="">Selecione o estado</option>
+            <option value="AC">Acre</option>
+            <option value="AL">Alagoas</option>
+            <option value="AP">Amapá</option>
+            <option value="AM">Amazonas</option>
+            <option value="BA">Bahia</option>
+            <option value="CE">Ceará</option>
+            <option value="DF">Distrito Federal</option>
+            <option value="ES">Espírito Santo</option>
+            <option value="GO">Goiás</option>
+            <option value="MA">Maranhão</option>
+            <option value="MT">Mato Grosso</option>
+            <option value="MS">Mato Grosso do Sul</option>
+            <option value="MG">Minas Gerais</option>
+            <option value="PA">Pará</option>
+            <option value="PB">Paraíba</option>
+            <option value="PR">Paraná</option>
+            <option value="PE">Pernambuco</option>
+            <option value="PI">Piauí</option>
+            <option value="RJ">Rio de Janeiro</option>
+            <option value="RN">Rio Grande do Norte</option>
+            <option value="RS">Rio Grande do Sul</option>
+            <option value="RO">Rondônia</option>
+            <option value="RR">Roraima</option>
+            <option value="SC">Santa Catarina</option>
+            <option value="SP">São Paulo</option>
+            <option value="SE">Sergipe</option>
+            <option value="TO">Tocantins</option>
+          </select>
+        </label>
+        <label>
+          Cidade
+          <select id="cidade" name="cidade" required>
+            <option value="">Selecione o estado primeiro</option>
+          </select>
+        </label>
+      </div>
+      <div class="checkbox">
+        <input id="remote_only" name="remote_only" type="checkbox" />
+        <label for="remote_only">Apenas home office</label>
+      </div>
+    </div>
+
+    <!-- Honeypot anti-spam -->
+    <input class="hp" name="hp" type="text" autocomplete="off" tabindex="-1" />
+
+    <button type="submit">Assinar</button>
+    <div id="mensagem-finalizacao" style="display:none;margin-top:18px;padding:12px;background:#22c55e;color:white;border-radius:12px;text-align:center;font-weight:600"></div>
+  </form>
+<script>
+// Estados e cidades (exemplo reduzido, pode ser expandido conforme necessidade)
+const cidadesPorEstado = {
+  AC: ["Rio Branco", "Cruzeiro do Sul"],
+  AL: ["Maceió", "Arapiraca"],
+  AP: ["Macapá", "Santana"],
+  AM: ["Manaus", "Parintins"],
+  BA: ["Salvador", "Feira de Santana"],
+  CE: ["Fortaleza", "Juazeiro do Norte"],
+  DF: ["Brasília"],
+  ES: ["Vitória", "Vila Velha"],
+  GO: ["Goiânia", "Anápolis"],
+  MA: ["São Luís", "Imperatriz"],
+  MT: ["Cuiabá", "Várzea Grande"],
+  MS: ["Campo Grande", "Dourados"],
+  MG: ["Belo Horizonte", "Uberlândia"],
+  PA: ["Belém", "Ananindeua"],
+  PB: ["João Pessoa", "Campina Grande"],
+  PR: ["Curitiba", "Londrina"],
+  PE: ["Recife", "Jaboatão dos Guararapes"],
+  PI: ["Teresina", "Parnaíba"],
+  RJ: ["Rio de Janeiro", "Niterói"],
+  RN: ["Natal", "Mossoró"],
+  RS: ["Porto Alegre", "Caxias do Sul"],
+  RO: ["Porto Velho", "Ji-Paraná"],
+  RR: ["Boa Vista"],
+  SC: ["Florianópolis", "Joinville"],
+  SP: ["São Paulo", "Campinas", "Santos", "Ribeirão Preto"],
+  SE: ["Aracaju"],
+  TO: ["Palmas"]
+};
+
+document.getElementById('estado').addEventListener('change', function() {
+  const estado = this.value;
+  const cidadeSelect = document.getElementById('cidade');
+  cidadeSelect.innerHTML = '';
+  if (estado && cidadesPorEstado[estado]) {
+    cidadesPorEstado[estado].forEach(function(cidade) {
+      const opt = document.createElement('option');
+      opt.value = cidade;
+      opt.textContent = cidade;
+      cidadeSelect.appendChild(opt);
+    });
+    cidadeSelect.insertAdjacentHTML('afterbegin', '<option value="">Selecione a cidade</option>');
+    cidadeSelect.disabled = false;
+  } else {
+    cidadeSelect.innerHTML = '<option value="">Selecione o estado primeiro</option>';
+    cidadeSelect.disabled = true;
+  }
+});
+document.getElementById('cidade').disabled = true;
+
+// Mensagem de finalização após envio
+document.querySelector('form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const form = this;
+  const data = new FormData(form);
+  fetch(form.action, {
+    method: 'POST',
+    body: data
+  })
+  .then(response => {
+    if (response.ok) {
+      document.getElementById('mensagem-finalizacao').textContent = 'Inscrição realizada com sucesso! Você receberá as vagas no WhatsApp.';
+      document.getElementById('mensagem-finalizacao').style.display = 'block';
+      form.reset();
+      document.getElementById('cidade').disabled = true;
+    } else {
+      document.getElementById('mensagem-finalizacao').textContent = 'Ocorreu um erro ao enviar. Tente novamente.';
+      document.getElementById('mensagem-finalizacao').style.display = 'block';
+    }
+  })
+  .catch(() => {
+    document.getElementById('mensagem-finalizacao').textContent = 'Ocorreu um erro ao enviar. Tente novamente.';
+    document.getElementById('mensagem-finalizacao').style.display = 'block';
+  });
+});
+</script>
+</body>
+</html>
