@@ -6,9 +6,9 @@ services:
     image: nginx:alpine
     container_name: alerta-jobs-web
     volumes:
-      - ./subscribe.html:/usr/share/nginx/html/index.html
+      - ./html:/usr/share/nginx/html/
     ports:
-      - "80:80"  # Mapeia a porta 80 da VPS para o container
+      - "80:80"
     networks:
       - app_net
     restart: unless-stopped
