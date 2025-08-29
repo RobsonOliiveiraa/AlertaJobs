@@ -9,8 +9,7 @@ services:
       - ./html:/usr/share/nginx/html/
     ports:
       - "80:80"
-    networks:
-      - app_net
+    networks: [app_net]
     restart: unless-stopped
 
   redis:
@@ -66,7 +65,7 @@ services:
       QUEUE_BULL_REDIS_HOST: redis
       QUEUE_BULL_REDIS_PORT: 6379
 
-      N8N_ENCRYPTION_KEY: please-change-this-key  # <<< TROQUE DEPOIS (openssl rand -base64 24)
+      N8N_ENCRYPTION_KEY: please-change-this-key  # <<< TROQUE DEPOIS
       N8N_HOST: localhost
       N8N_PORT: 5678
       N8N_PROTOCOL: http
@@ -95,12 +94,12 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
-        scraper:
+  scraper:
     build:
-      build:
-    context: ./scraper
-    dockerfile: Dockerfile
-    command: ["python", "/app/app.py"]   # ajuste se o nome do script for outro
+      context: ./scraper        # <- se o Dockerfile/app.py estiverem NA RAIZ, troque para: context: .
+      dockerfile: Dockerfile
+    container_name: alerta-jobs-scraper
+    command: ["python", "/app/app.py"]   # ajuste se seu script tiver outro nome/caminho
     environment:
       TZ: America/Sao_Paulo
       DB_HOST: postgres
@@ -109,7 +108,7 @@ services:
       DB_USER: n8n
       DB_PASSWORD: ChangeThis!123      # o mesmo do serviço postgres
       SCRAPE_SOURCES: "linkedin,infojobs"
-      SCRAPE_INTERVAL_MIN: "60"        # roda a cada 60 min (seu app.py respeitar isso)
+      SCRAPE_INTERVAL_MIN: "60"        # se seu app.py usar isso
     depends_on:
       postgres:
         condition: service_healthy
@@ -122,20 +121,20 @@ services:
         max-size: "10m"
         max-file: "3"
 
- waha:
+  waha:
     image: devlikeapro/whatsapp-http-api:latest
     ports:
       - "3000:3000"
     environment:
       TZ: America/Sao_Paulo
-      # API_KEY: changeThisApiKey    # opcional: ative e exija header X-Api-Key
+      # API_KEY: changeThisApiKey
     volumes:
       - waha_sessions:/sessions
     networks: [app_net]
     restart: unless-stopped
     mem_limit: 2048m
-    # usar raiz (200 OK); /health é recurso da versão Plus e retorna 422
     healthcheck:
+      # usar raiz (200 OK); /health é Plus e retorna 422
       test: ["CMD-SHELL","wget -qO- http://localhost:3000/ >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
