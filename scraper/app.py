@@ -1,33 +1,39 @@
-# app.py
 import os
 import re
 import time
 import random
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse, parse_qs, urlunparse
 
-import pandas as pd
 from bs4 import BeautifulSoup
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
 
 import psycopg2
 from psycopg2.extras import execute_values
 
-# ============================================================================
-# Configurações via ENV
-# ============================================================================
+# =============================================================================
+# Config
+# =============================================================================
 KEYWORDS = os.getenv("KEYWORDS", "").strip()
 LOCATION = os.getenv("LOCATION", "Brasil").strip()
-GEOID = os.getenv("GEOID", "106057199")            # Brasil
-F_TPR = os.getenv("F_TPR", "r86400")               # últimas 24h
+GEOID = os.getenv("GEOID", "106057199")             # Brasil
+F_TPR = os.getenv("F_TPR", "r86400")                # últimas 24h
 SCRAPE_SOURCES = os.getenv("SCRAPE_SOURCES", "linkedin,infojobs").lower()
-SCRAPE_INTERVAL_MIN = int(os.getenv("SCRAPE_INTERVAL_MIN", "60"))
+
+# Agenda: por padrão 08, 12, 16, 19. Pode sobrescrever com SCHEDULE_HOURS="8,12,16,19"
+_sched_env = os.getenv("SCHEDULE_HOURS", "").strip()
+if _sched_env:
+    SCHEDULE_HOURS = sorted(int(h) for h in re.findall(r"\d+", _sched_env))
+else:
+    SCHEDULE_HOURS = [8, 12, 16, 19]
 
 DB_HOST = os.getenv("DB_HOST", "postgres")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
@@ -52,9 +58,9 @@ BR_KEYWORDS = {
 
 TIPOS_VAGA = {"Remoto": "2", "Presencial": "1", "Híbrido": "3"}
 
-# ============================================================================
-# Utils: canonicalização e ID único por vaga
-# ============================================================================
+# =============================================================================
+# Helpers de link/ID
+# =============================================================================
 LINKEDIN_VIEW_ID = re.compile(r"/jobs/view/(\d+)")
 INFOJOBS_ID = re.compile(r"-([0-9]{6,})\.aspx", re.IGNORECASE)
 
@@ -62,100 +68,114 @@ def md5(s: str) -> str:
     return hashlib.md5(s.encode("utf-8")).hexdigest()
 
 def canonicalize_link(url: str, source: str) -> str:
-    """Remove query/fragments e normaliza LinkedIn/InfoJobs para link estável."""
     if not url:
         return ""
     p = urlparse(url)
-
-    # LinkedIn: tentar pegar /jobs/view/<id>
     if "linkedin.com" in p.netloc:
         m = LINKEDIN_VIEW_ID.search(p.path)
         if m:
-            jobid = m.group(1)
-            return f"https://www.linkedin.com/jobs/view/{jobid}"
-        # fallback: remove query/fragment
+            return f"https://www.linkedin.com/jobs/view/{m.group(1)}"
         return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
-
-    # InfoJobs: manter caminho sem query; (já contém o id no path)
     if "infojobs.com.br" in p.netloc:
         return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
-
-    # padrão para outras fontes
     return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
 
 def extract_job_uid(url: str, source: str) -> str:
-    """Extrai um identificador único por vaga; fallback md5 do link canonical."""
     if not url:
         return ""
-
     canon = canonicalize_link(url, source)
-
     if source == "linkedin":
-        # /jobs/view/<id>
         m = LINKEDIN_VIEW_ID.search(canon)
         if m:
             return f"li:{m.group(1)}"
-
-        # currentJobId / trackingId (fallbacks)
         q = parse_qs(urlparse(url).query)
         if "currentJobId" in q and q["currentJobId"]:
             return f"li:{q['currentJobId'][0]}"
         if "trackingId" in q and q["trackingId"]:
             return f"li:trk:{q['trackingId'][0]}"
-
         return f"li:{md5(canon)}"
-
     if source == "infojobs":
         m = INFOJOBS_ID.search(canon)
         if m:
             return f"ij:{m.group(1)}"
         return f"ij:{md5(canon)}"
-
     return md5(canon)
 
-# ============================================================================
+# =============================================================================
 # Selenium / Chromium
-# ============================================================================
+# =============================================================================
 def make_driver(geo: dict | None = None) -> webdriver.Chrome:
-    """Chrome headless p/ Docker. Se geo for passado, concede geolocation ao origin alvo."""
+    """Cria Chrome headless e, se 'geo' existir, injeta geolocalização + bloqueio de alerts ANTES de qualquer página."""
     opts = Options()
     opts.binary_location = CHROME_BINARY
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--disable-gpu")
-    opts.add_argument("--window-size=1280,2200")
+    opts.add_argument("--window-size=1366,2400")
     opts.add_argument("--lang=pt-BR")
-    opts.add_argument("--disable-software-rasterizer")
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option("useAutomationExtension", False)
-
-    # Permissão padrão: geolocalização permitida (1); bloquear seria 2
+    # geolocation: allow (1)
     prefs = {"profile.default_content_setting_values.geolocation": 1}
     opts.add_experimental_option("prefs", prefs)
-
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
     opts.add_argument(f"--user-agent={ua}")
 
     driver = webdriver.Chrome(service=Service(CHROMEDRIVER), options=opts)
 
-    # Injeta geolocalização se pedido (feito por domínio/Origin)
+    # Script injetado em TODO novo documento (antes de a página rodar JS)
     if geo:
+        origin = geo.get("origin", "https://www.infojobs.com.br")
+        lat = float(geo.get("lat", -23.55052))
+        lng = float(geo.get("lng", -46.633308))
+
+        inject = f"""
+        (() => {{
+          const allowed = {{ state: 'granted', onchange: null }};
+          const fakePos = {{ coords: {{ latitude: {lat}, longitude: {lng}, accuracy: 100 }} }};
+          // Finge que a permissão está concedida
+          const origPerms = navigator.permissions && navigator.permissions.query
+              ? navigator.permissions.query.bind(navigator.permissions) : null;
+          if (navigator.permissions) {{
+            navigator.permissions.query = (p) => {{
+              if (p && p.name === 'geolocation') return Promise.resolve(allowed);
+              return origPerms ? origPerms(p) : Promise.resolve(allowed);
+            }};
+          }} else {{
+            Object.defineProperty(navigator, 'permissions', {{
+              value: {{ query: async () => allowed }}
+            }});
+          }}
+          // Geolocalização fake
+          const ok = (cb) => setTimeout(() => cb(fakePos), 0);
+          if (navigator.geolocation) {{
+            navigator.geolocation.getCurrentPosition = (s) => ok(s);
+            navigator.geolocation.watchPosition = (s) => (ok(s), Math.floor(Math.random()*10000));
+          }} else {{
+            Object.defineProperty(navigator, 'geolocation', {{
+              value: {{
+                getCurrentPosition: (s) => ok(s),
+                watchPosition: (s) => (ok(s), Math.floor(Math.random()*10000))
+              }}
+            }});
+          }}
+          // Mata alert/confirm/prompt
+          window.alert = () => true;
+          window.confirm = () => true;
+          window.prompt = () => '';
+        }})();
+        """
         try:
-            origin = geo.get("origin", "https://www.infojobs.com.br")
-            lat = float(geo.get("lat", -23.55052))   # São Paulo
-            lng = float(geo.get("lng", -46.633308))
-            driver.get(origin)
+            driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": inject})
             driver.execute_cdp_cmd("Browser.grantPermissions", {
-                "origin": origin,
-                "permissions": ["geolocation"],
+                "origin": origin, "permissions": ["geolocation"]
             })
             driver.execute_cdp_cmd("Emulation.setGeolocationOverride", {
-                "latitude": lat, "longitude": lng, "accuracy": 100,
+                "latitude": lat, "longitude": lng, "accuracy": 50
             })
-            time.sleep(0.2)
         except WebDriverException as e:
-            print(f"[WARN] Geolocalização simulada falhou: {e}", flush=True)
+            print(f"[WARN] Falha ao injetar perms/geo: {e}", flush=True)
 
     return driver
 
@@ -163,19 +183,17 @@ def gentle_scroll(driver, times=12, min_sleep=1.0, max_sleep=2.0):
     for _ in range(times):
         driver.execute_script("window.scrollBy(0, 1400);")
         time.sleep(random.uniform(min_sleep, max_sleep))
-        # tenta fechar modais óbvios do LinkedIn
         try:
             close_btn = driver.find_element(By.XPATH, "//button[@aria-label='Fechar' or @aria-label='Close']")
             if close_btn.is_displayed():
                 close_btn.click()
-                time.sleep(0.3)
         except Exception:
             pass
 
-# ============================================================================
+# =============================================================================
 # Scrapers
-# ============================================================================
-def scrape_linkedin(driver) -> list:
+# =============================================================================
+def scrape_linkedin(driver) -> list[dict]:
     posts = []
     for tipo_nome, tipo_valor in TIPOS_VAGA.items():
         url = (
@@ -228,16 +246,14 @@ def scrape_linkedin(driver) -> list:
                 })
         except Exception as e:
             print(f"[LinkedIn] Erro: {e}", flush=True)
-
     return posts
 
-def scrape_infojobs() -> list:
+def scrape_infojobs() -> list[dict]:
     posts = []
     infojobs_links = [
         ("https://www.infojobs.com.br/empregos-em-sao-paulo.aspx?Antiguedad=1", "São Paulo"),
         ("https://www.infojobs.com.br/empregos-em-rio-janeiro.aspx?Antiguedad=1", "Rio de Janeiro"),
     ]
-    # Driver com geolocalização/perm to evitar alerta
     drv = make_driver(geo={"origin": "https://www.infojobs.com.br", "lat": -23.55052, "lng": -46.633308})
 
     for url, estado in infojobs_links:
@@ -245,12 +261,26 @@ def scrape_infojobs() -> list:
         try:
             drv.get(url)
 
-            # aceitar cookies, se houver
+            # se mesmo assim aparecer alerta: aceita e segue
+            try:
+                WebDriverWait(drv, 2).until(EC.alert_is_present())
+                drv.switch_to.alert.accept()
+                time.sleep(0.3)
+            except TimeoutException:
+                pass
+            except Exception:
+                # se não conseguir aceitar, tenta dismiss
+                try:
+                    drv.switch_to.alert.dismiss()
+                except Exception:
+                    pass
+
+            # aceitar cookies (se aparecer)
             try:
                 btn = drv.find_element(By.CSS_SELECTOR, "#didomi-notice-agree-button, button[aria-label*='Aceitar']")
                 if btn.is_displayed():
                     btn.click()
-                    time.sleep(0.5)
+                    time.sleep(0.4)
             except Exception:
                 pass
 
@@ -266,7 +296,6 @@ def scrape_infojobs() -> list:
                 canon = canonicalize_link(full, "infojobs")
                 uid = extract_job_uid(full, "infojobs")
 
-                # heurísticas frágeis (layout muda): tentamos empresa/tipo em volta
                 card = a.find_parent(["article", "div", "li"])
                 company = ""
                 location = estado
@@ -301,9 +330,9 @@ def scrape_infojobs() -> list:
 
     return posts
 
-# ============================================================================
-# Persistência
-# ============================================================================
+# =============================================================================
+# DB
+# =============================================================================
 DDL_VAGAS = """
 CREATE TABLE IF NOT EXISTS vagas (
     id BIGSERIAL PRIMARY KEY,
@@ -320,8 +349,6 @@ CREATE TABLE IF NOT EXISTS vagas (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 """
-
-# Garante colunas/índices mesmo se a tabela já existia
 DDL_ALTERS = [
     "ALTER TABLE vagas ADD COLUMN IF NOT EXISTS job_uid TEXT;",
     "ALTER TABLE vagas ADD COLUMN IF NOT EXISTS canonical_link TEXT;",
@@ -344,7 +371,7 @@ ON CONFLICT (job_uid) DO UPDATE SET
   updated_at = now();
 """
 
-def save_to_postgres(rows: list):
+def save_to_postgres(rows: list[dict]):
     if not rows:
         print("[DB] Nada para inserir.", flush=True)
         return
@@ -368,11 +395,10 @@ def save_to_postgres(rows: list):
                 r.get("tipo_vaga", ""),
                 r.get("data_publicacao", ""),
                 r.get("source", ""),
-                datetime.utcnow(),  # updated_at
+                datetime.utcnow(),
             )
             for r in rows if r.get("job_uid")
         ]
-
         if values:
             execute_values(cur, INSERT_VAGAS, values, page_size=500)
             conn.commit()
@@ -383,13 +409,26 @@ def save_to_postgres(rows: list):
     except Exception as e:
         print(f"[DB] Erro ao salvar: {e}", flush=True)
 
-# ============================================================================
+# =============================================================================
+# Scheduler
+# =============================================================================
+def seconds_until_next_run(now: datetime | None = None) -> tuple[int, datetime]:
+    now = now or datetime.now()
+    today_slots = [now.replace(hour=h, minute=0, second=0, microsecond=0) for h in SCHEDULE_HOURS]
+    future = [t for t in today_slots if t > now]
+    if future:
+        nxt = min(future)
+    else:
+        # amanhã, no primeiro horário
+        nxt = (now + timedelta(days=1)).replace(hour=SCHEDULE_HOURS[0], minute=0, second=0, microsecond=0)
+    return int((nxt - now).total_seconds()), nxt
+
+# =============================================================================
 # Main
-# ============================================================================
+# =============================================================================
 def run_once():
     all_posts: list[dict] = []
 
-    # LinkedIn usa um driver; InfoJobs usa outro (com geo)
     li_driver = None
     try:
         if "linkedin" in SCRAPE_SOURCES:
@@ -425,18 +464,14 @@ def run_once():
 if __name__ == "__main__":
     print(
         f"== AlertaJobs Scraper ==\n"
-        f"Sources: {SCRAPE_SOURCES} | Intervalo: {SCRAPE_INTERVAL_MIN} min\n"
+        f"Sources: {SCRAPE_SOURCES}\n"
+        f"Horários: {SCHEDULE_HOURS}h (hora local do container)\n"
         f"Keywords: '{KEYWORDS}' | Location: '{LOCATION}'\n"
         f"DB: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
         flush=True,
     )
     while True:
-        t0 = datetime.now()
-        try:
-            run_once()
-        except Exception as e:
-            print(f"[FATAL] {e}", flush=True)
-        elapsed = (datetime.now() - t0).seconds
-        sleep_s = max(10, SCRAPE_INTERVAL_MIN * 60 - elapsed)
-        print(f"[SLEEP] Aguardando {sleep_s}s até próxima coleta...", flush=True)
-        time.sleep(sleep_s)
+        run_once()
+        secs, nxt = seconds_until_next_run()
+        print(f"[SLEEP] Próxima execução {nxt.strftime('%d/%m %H:%M')} (em {secs}s)…", flush=True)
+        time.sleep(secs)
