@@ -92,7 +92,7 @@ services:
 
   scraper:
     build:
-      context: .
+      context: /root/AlertaJobs
       dockerfile: scraper/Dockerfile
     command: ["python", "/app/app.py"]
     environment:
