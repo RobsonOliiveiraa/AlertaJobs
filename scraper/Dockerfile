@@ -1,9 +1,8 @@
-# ~/AlertaJobs/scraper/Dockerfile
+# Sobrescreve o Dockerfile do scraper com o COPY correto
+cat > ~/AlertaJobs/scraper/Dockerfile <<'EOF'
 FROM python:3.11-slim
-
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Dependências do Chromium/ChromeDriver e libs gráficas
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     chromium-driver \
@@ -19,7 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Bibliotecas Python que costumam ser usadas no scraper
 RUN pip install --no-cache-dir \
     selenium \
     webdriver-manager \
@@ -29,12 +27,21 @@ RUN pip install --no-cache-dir \
     lxml \
     pandas
 
-# Copia seu código
-COPY app.py /app/
+# <- AQUI está a correção: arquivo está em scraper/app.py dentro do contexto raiz
+COPY scraper/app.py /app/
 
-# Dicas para o seu script localizar o binário/driver
 ENV CHROME_BINARY=/usr/bin/chromium
 ENV CHROMEDRIVER=/usr/bin/chromedriver
 
-# Execute seu scraper
 CMD ["python", "/app/app.py"]
+EOF
+
+# Reconstrói só o scraper e sobe tudo
+cd ~/AlertaJobs
+docker compose down --remove-orphans
+docker compose build --no-cache scraper
+docker compose up -d
+
+# Verifique
+docker compose ps
+docker compose logs -f scraper
