@@ -96,8 +96,8 @@ services:
 
   scraper:
     build:
-      context: ./scraper        # <- se o Dockerfile/app.py estiverem NA RAIZ, troque para: context: .
-      dockerfile: Dockerfile
+      context:         # <- se o Dockerfile/app.py estiverem NA RAIZ, troque para: context: .
+      dockerfile: scraper/Dockerfile
     container_name: alerta-jobs-scraper
     command: ["python", "/app/app.py"]   # ajuste se seu script tiver outro nome/caminho
     environment:
