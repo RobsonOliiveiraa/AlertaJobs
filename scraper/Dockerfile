@@ -1,7 +1,5 @@
-rm -f ~/AlertaJobs/scraper/Dockerfile
-
-cat > ~/AlertaJobs/scraper/Dockerfile <<'EOF'
 FROM python:3.11-slim
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatk-bridge2.0-0 \
     libgbm1 \
     libu2f-udev \
-    && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -28,12 +26,10 @@ RUN pip install --no-cache-dir \
     lxml \
     pandas
 
-# ATENÇÃO: seu build.context é a raiz do repo (/root/AlertaJobs),
-# então o app está em scraper/app.py
-COPY scraper/app.py /app/
+# copia todo o diretório scraper/ do repo para dentro da imagem
+COPY scraper/ /app/
 
 ENV CHROME_BINARY=/usr/bin/chromium
 ENV CHROMEDRIVER=/usr/bin/chromedriver
 
 CMD ["python", "/app/app.py"]
-EOF
