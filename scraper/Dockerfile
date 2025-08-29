@@ -1,4 +1,5 @@
-# Sobrescreve o Dockerfile do scraper com o COPY correto
+rm -f ~/AlertaJobs/scraper/Dockerfile
+
 cat > ~/AlertaJobs/scraper/Dockerfile <<'EOF'
 FROM python:3.11-slim
 ENV DEBIAN_FRONTEND=noninteractive
@@ -27,7 +28,8 @@ RUN pip install --no-cache-dir \
     lxml \
     pandas
 
-# <- AQUI está a correção: arquivo está em scraper/app.py dentro do contexto raiz
+# ATENÇÃO: seu build.context é a raiz do repo (/root/AlertaJobs),
+# então o app está em scraper/app.py
 COPY scraper/app.py /app/
 
 ENV CHROME_BINARY=/usr/bin/chromium
@@ -35,13 +37,3 @@ ENV CHROMEDRIVER=/usr/bin/chromedriver
 
 CMD ["python", "/app/app.py"]
 EOF
-
-# Reconstrói só o scraper e sobe tudo
-cd ~/AlertaJobs
-docker compose down --remove-orphans
-docker compose build --no-cache scraper
-docker compose up -d
-
-# Verifique
-docker compose ps
-docker compose logs -f scraper
