@@ -5,30 +5,35 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     chromium-driver \
+    ca-certificates \
     fonts-liberation \
     libnss3 \
     libasound2 \
     libxss1 \
-    libappindicator3-1 \
-    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
     libgbm1 \
-    libu2f-udev \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
     selenium \
-    webdriver-manager \
     psycopg2-binary \
     requests \
     beautifulsoup4 \
     lxml \
     pandas
 
-# copia todo o diretório scraper/ do repo para dentro da imagem
+# Copia TODO o diretório scraper/ do repo para a imagem
 COPY scraper/ /app/
 
+# Informa onde estão os binários do Chrome/Driver
 ENV CHROME_BINARY=/usr/bin/chromium
 ENV CHROMEDRIVER=/usr/bin/chromedriver
 
