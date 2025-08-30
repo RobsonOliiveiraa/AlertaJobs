@@ -2,172 +2,342 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Assinar – AlertaJobs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AlertaJobs — Vagas do dia no seu WhatsApp</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
-    form{max-width:520px;width:100%;background:#111827;padding:24px;border-radius:16px;box-shadow:0 10px 30px #0006}
-    h1{margin:0 0 12px;font-size:22px}
-    p{margin:0 0 16px;color:#93c5fd}
-    label{display:block;margin-top:12px;font-size:14px}
-    input,textarea,select{width:100%;padding:12px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:#e2e8f0;margin-top:6px}
-    .row{display:flex;gap:12px}
-    .row>div{flex:1}
-    .hint{font-size:12px;color:#94a3b8}
-    .checkbox{display:flex;gap:8px;align-items:center;margin-top:10px}
-    button{margin-top:18px;width:100%;padding:12px;border:0;border-radius:12px;background:#6366f1;color:white;font-weight:600;cursor:pointer}
-    button:hover{filter:brightness(1.1)}
-    .hp{display:none} /* honeypot */
+    :root{
+      --bg:#ffffff;--ink:#0f172a;--muted:#475569;
+      --primary:#6D28D9;--primary-700:#5B21B6;--ring:#C4B5FD;
+      --ok:#16A34A;--err:#DC2626;--card:#f8f7ff;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
+    a{color:inherit}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+    .hero{
+      background: radial-gradient(1200px 600px at 10% -10%, #EDE9FE, transparent),
+                  radial-gradient(900px 500px at 100% 0%, #DDD6FE, transparent);
+      padding:56px 0 32px;
+    }
+    .hero-inner{display:grid;gap:24px;align-items:center}
+    @media (min-width:900px){.hero-inner{grid-template-columns:1.2fr .8fr}}
+    .eyebrow{color:var(--primary);font-weight:600;letter-spacing:.02em;margin-bottom:6px}
+    h1{font-size:clamp(28px,4vw,44px);line-height:1.1;margin:0 0 12px}
+    .lead{color:var(--muted);font-size:clamp(16px,2.2vw,19px);margin:0 0 16px}
+    .bullets{display:grid;gap:10px;margin:18px 0 26px}
+    @media (min-width:600px){.bullets{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    .chip{background:#EEF2FF;border:1px solid #E0E7FF;color:#3730A3;border-radius:999px;padding:10px 14px;text-align:center;font-weight:600}
+    .cta-primary{
+      display:inline-block;background:var(--primary);color:#fff;border:none;border-radius:12px;
+      padding:14px 22px;font-weight:700;font-size:18px;cursor:pointer;box-shadow:0 8px 24px rgba(109,40,217,.25);
+      transition:.2s transform,.2s background;
+    }
+    .cta-primary:hover{background:var(--primary-700);transform:translateY(-1px)}
+    .trust{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:14px;margin-top:10px}
+    .shield{width:18px;height:18px;display:inline-block;background:conic-gradient(from 180deg at 50% 50%,#6D28D9, #8B5CF6);border-radius:4px;opacity:.9}
+
+    .section{padding:40px 0}
+    .grid-3{display:grid;gap:18px}
+    @media (min-width:760px){.grid-3{grid-template-columns:repeat(3,1fr)}}
+    .card{background:var(--card);border:1px solid #e9e5ff;border-radius:14px;padding:16px}
+
+    /* Form */
+    #assinar{scroll-margin-top:24px}
+    .form-wrap{background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:22px;box-shadow:0 10px 30px rgba(17,24,39,.06)}
+    .form-title{font-weight:800;font-size:22px;margin:0 0 8px}
+    .form-sub{color:var(--muted);margin:0 0 16px}
+    label{display:block;font-weight:600;margin:12px 0 6px}
+    input,select,button,textarea{
+      font:inherit;width:100%;padding:12px 12px;border:1px solid #CBD5E1;border-radius:10px;background:#fff;outline:none
+    }
+    input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--ring)}
+    .row{display:grid;gap:14px}
+    @media (min-width:720px){.row.two{grid-template-columns:1fr 1fr}}
+    .hint{font-size:12px;color:var(--muted);margin-top:6px}
+    .error{color:var(--err);font-size:14px;margin:6px 0 0}
+    .alert{border-radius:12px;padding:12px 14px;margin:10px 0;font-weight:600}
+    .alert.ok{background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0}
+    .alert.err{background:#FEF2F2;color:#7F1D1D;border:1px solid #FECACA}
+    .submit{margin-top:10px}
+    .tiny{font-size:12px;color:var(--muted);margin-top:10px}
+    .foot{padding:28px 0;color:#64748B;text-align:center;font-size:14px}
+
+    /* Modal */
+    .modal-backdrop{
+      position:fixed;inset:0;background:rgba(2,6,23,.55);
+      display:none;align-items:center;justify-content:center;padding:20px;z-index:50
+    }
+    .modal{
+      width:min(560px,92vw);background:#fff;border-radius:16px;border:1px solid #E5E7EB;
+      box-shadow:0 20px 60px rgba(2,6,23,.35);padding:22px
+    }
+    .modal h3{margin:0 0 6px;font-size:22px}
+    .modal p{margin:8px 0;color:var(--muted)}
+    .time-badges{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+    .time-badges span{background:#EEF2FF;border:1px solid #E0E7FF;color:#3730A3;padding:8px 10px;border-radius:999px;font-weight:700}
+    .modal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .btn{padding:12px 14px;border-radius:10px;border:1px solid #E2E8F0;background:#fff;cursor:pointer}
+    .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
   </style>
 </head>
 <body>
-  <form method="POST" action="http://72.60.56.138:5678/webhook-test/subscribe">
-    <h1>Assine o AlertaJobs</h1>
-    <p>Receba no WhatsApp vagas recentes do Indeed, filtradas por palavras-chave e localidade.</p>
-
-    <label>
-      WhatsApp (apenas números)
-      <input name="phone" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="11987654321" required />
-      <div class="hint">Coloque DDD. O +55 será adicionado automaticamente.</div>
-    </label>
-
-    <label>
-      Palavras-chave
-      <input name="keywords" type="text" placeholder="ex.: python, jr, remoto" />
-      <div class="hint">Separe por vírgula ou ponto e vírgula.</div>
-    </label>
-
-    <div class="row">
+  <header class="hero">
+    <div class="wrap hero-inner">
       <div>
-        <label>
-          Estado
-          <select id="estado" name="estado" required>
-            <option value="">Selecione o estado</option>
-            <option value="AC">Acre</option>
-            <option value="AL">Alagoas</option>
-            <option value="AP">Amapá</option>
-            <option value="AM">Amazonas</option>
-            <option value="BA">Bahia</option>
-            <option value="CE">Ceará</option>
-            <option value="DF">Distrito Federal</option>
-            <option value="ES">Espírito Santo</option>
-            <option value="GO">Goiás</option>
-            <option value="MA">Maranhão</option>
-            <option value="MT">Mato Grosso</option>
-            <option value="MS">Mato Grosso do Sul</option>
-            <option value="MG">Minas Gerais</option>
-            <option value="PA">Pará</option>
-            <option value="PB">Paraíba</option>
-            <option value="PR">Paraná</option>
-            <option value="PE">Pernambuco</option>
-            <option value="PI">Piauí</option>
-            <option value="RJ">Rio de Janeiro</option>
-            <option value="RN">Rio Grande do Norte</option>
-            <option value="RS">Rio Grande do Sul</option>
-            <option value="RO">Rondônia</option>
-            <option value="RR">Roraima</option>
-            <option value="SC">Santa Catarina</option>
-            <option value="SP">São Paulo</option>
-            <option value="SE">Sergipe</option>
-            <option value="TO">Tocantins</option>
-          </select>
-        </label>
-        <label>
-          Cidade
-          <select id="cidade" name="cidade" required>
-            <option value="">Selecione o estado primeiro</option>
-          </select>
-        </label>
+        <div class="eyebrow">Vagas do dia • Recém-abertas</div>
+        <h1>Receba as melhores vagas no seu WhatsApp — todos os dias.</h1>
+        <p class="lead">
+          Quanto mais cedo você se candidata, maiores as chances de entrevista.
+          Nós garimpamos vagas recém-publicadas e enviamos só o que combina com você
+          (cargo, cidade/UF, remoto/presencial e nível).
+        </p>
+        <div class="bullets">
+          <div class="chip">Curadoria diária • sem spam</div>
+          <div class="chip">Entrega direta no WhatsApp</div>
+          <div class="chip">Cancelamento fácil</div>
+        </div>
+        <a href="#assinar" class="cta-primary">Assinar agora</a>
+        <div class="trust"><span class="shield"></span> Pagamento/armazenamento seguro • Seus dados protegidos</div>
       </div>
-      <div class="checkbox">
-        <input id="remote_only" name="remote_only" type="checkbox" />
-        <label for="remote_only">Apenas home office</label>
+      <div aria-hidden="true">
+        <svg viewBox="0 0 500 360" width="100%" role="img">
+          <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6D28D9"/><stop offset="1" stop-color="#A78BFA"/></linearGradient></defs>
+          <rect x="30" y="40" width="440" height="260" rx="16" fill="url(#g)" opacity=".12"/>
+          <rect x="70" y="80" width="360" height="12" rx="6" fill="#6D28D9" opacity=".6"/>
+          <rect x="70" y="110" width="280" height="12" rx="6" fill="#6D28D9" opacity=".4"/>
+          <rect x="70" y="140" width="320" height="12" rx="6" fill="#6D28D9" opacity=".4"/>
+          <rect x="70" y="180" width="220" height="50" rx="10" fill="#6D28D9" opacity=".2"/>
+          <rect x="300" y="180" width="130" height="50" rx="10" fill="#6D28D9" opacity=".25"/>
+          <rect x="70" y="250" width="200" height="14" rx="7" fill="#6D28D9" opacity=".35"/>
+        </svg>
       </div>
     </div>
+  </header>
 
-    <!-- Honeypot anti-spam -->
-    <input class="hp" name="hp" type="text" autocomplete="off" tabindex="-1" />
+  <main>
+    <section class="section">
+      <div class="wrap grid-3">
+        <div class="card"><strong>Atenção = vantagem.</strong><br/>Ser um dos primeiros a se candidatar coloca você no topo da pilha de currículos.</div>
+        <div class="card"><strong>Filtro sob medida.</strong><br/>Informe cargo, localização, tipo e nível — enviamos só o que faz sentido para você.</div>
+        <div class="card"><strong>Zero fricção.</strong><br/>Receba no WhatsApp, todo dia, e aproveite o impulso da vaga recém-aberta.</div>
+      </div>
+    </section>
 
-    <button type="submit">Assinar</button>
-    <div id="mensagem-finalizacao" style="display:none;margin-top:18px;padding:12px;background:#22c55e;color:white;border-radius:12px;text-align:center;font-weight:600"></div>
-  </form>
-<script>
-// Estados e cidades (exemplo reduzido, pode ser expandido conforme necessidade)
-const cidadesPorEstado = {
-  AC: ["Rio Branco", "Cruzeiro do Sul"],
-  AL: ["Maceió", "Arapiraca"],
-  AP: ["Macapá", "Santana"],
-  AM: ["Manaus", "Parintins"],
-  BA: ["Salvador", "Feira de Santana"],
-  CE: ["Fortaleza", "Juazeiro do Norte"],
-  DF: ["Brasília"],
-  ES: ["Vitória", "Vila Velha"],
-  GO: ["Goiânia", "Anápolis"],
-  MA: ["São Luís", "Imperatriz"],
-  MT: ["Cuiabá", "Várzea Grande"],
-  MS: ["Campo Grande", "Dourados"],
-  MG: ["Belo Horizonte", "Uberlândia"],
-  PA: ["Belém", "Ananindeua"],
-  PB: ["João Pessoa", "Campina Grande"],
-  PR: ["Curitiba", "Londrina"],
-  PE: ["Recife", "Jaboatão dos Guararapes"],
-  PI: ["Teresina", "Parnaíba"],
-  RJ: ["Rio de Janeiro", "Niterói"],
-  RN: ["Natal", "Mossoró"],
-  RS: ["Porto Alegre", "Caxias do Sul"],
-  RO: ["Porto Velho", "Ji-Paraná"],
-  RR: ["Boa Vista"],
-  SC: ["Florianópolis", "Joinville"],
-  SP: ["São Paulo", "Campinas", "Santos", "Ribeirão Preto"],
-  SE: ["Aracaju"],
-  TO: ["Palmas"]
-};
+    <section id="assinar" class="section">
+      <div class="wrap">
+        <div class="form-wrap" role="form">
+          <h2 class="form-title">Conte pra gente o que você procura</h2>
+          <p class="form-sub">Preencha os campos abaixo. Enviaremos <b>vagas do dia</b> que combinam com o seu perfil.</p>
 
-document.getElementById('estado').addEventListener('change', function() {
-  const estado = this.value;
-  const cidadeSelect = document.getElementById('cidade');
-  cidadeSelect.innerHTML = '';
-  if (estado && cidadesPorEstado[estado]) {
-    cidadesPorEstado[estado].forEach(function(cidade) {
-      const opt = document.createElement('option');
-      opt.value = cidade;
-      opt.textContent = cidade;
-      cidadeSelect.appendChild(opt);
+          <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
+          <form id="subscribeForm"
+                method="POST"
+                action="http://72.60.56.138:5678/webhook-test/assinantes"
+                target="hidden_iframe"
+                novalidate>
+            <div id="formAlert" class="alert" style="display:none;"></div>
+
+            <label for="nome">Nome completo</label>
+            <input id="nome" name="nome" type="text" placeholder="Seu nome" required />
+
+            <label for="telefone">WhatsApp</label>
+            <input id="telefone" name="telefone" type="tel" inputmode="numeric" placeholder="Ex: 11 91234-5678" required />
+            <div class="hint">Usaremos apenas para enviar as vagas do dia. Sem spam.</div>
+
+            <label for="cargo">Cargo de interesse</label>
+            <input id="cargo" name="cargo" type="text" placeholder="Ex: Analista de Dados, Dev React..." required />
+
+            <div class="row two">
+              <div>
+                <label for="tipo">Tipo de vaga</label>
+                <select id="tipo" name="tipo" required>
+                  <option value="">Selecione</option>
+                  <option>Remoto</option>
+                  <option>Presencial</option>
+                  <option>Híbrido</option>
+                </select>
+              </div>
+              <div>
+                <label for="nivel_experiencia">Nível de experiência</label>
+                <select id="nivel_experiencia" name="nivel_experiencia" required>
+                  <option value="">Selecione</option>
+                  <option>Estágio</option>
+                  <option>Júnior</option>
+                  <option>Pleno</option>
+                  <option>Sênior</option>
+                  <option>Especialista</option>
+                  <option>Liderança</option>
+                </select>
+              </div>
+            </div>
+
+            <label for="localizacao">Localização (Cidade/UF)</label>
+            <input id="localizacao" name="localizacao" type="text" placeholder="Ex: São Paulo, SP" />
+
+            <!-- ocultos -->
+            <input type="hidden" name="assinante" value="true" />
+            <input type="text" name="hp" id="hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;height:0;width:0;opacity:0" />
+
+            <button class="cta-primary submit" type="submit">Assinar e receber no WhatsApp</button>
+            <div class="tiny">Ao continuar, você concorda em receber alertas de vagas por WhatsApp. Cancelamento a qualquer momento.</div>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="modal">
+      <h3 id="mTitle">Assinatura iniciada ✔</h3>
+      <p id="mIntro"></p>
+      <div class="time-badges">
+        <span>08:00</span><span>12:00</span><span>16:00</span><span>19:00</span>
+      </div>
+      <p><b>Como funciona:</b> você receberá <u>vagas recém-abertas do dia</u> no WhatsApp. Ser um dos primeiros a se candidatar aumenta muito suas chances de entrevista.</p>
+      <p id="mRedirect">Redirecionando para o pagamento seguro em <b><span id="count">6</span>s</b>…</p>
+      <div class="modal-actions">
+        <button class="btn" id="mClose">Fechar</button>
+        <a class="btn btn-primary" id="payNow" href="https://buy.stripe.com/test_3cIfZj7Pn0Hx1rd4I2gjC00">Pagar agora</a>
+      </div>
+      <p class="tiny">Os horários acima são em horário de Brasília (BRT). Assim que o pagamento for concluído, seu número será ativado para os envios.</p>
+    </div>
+  </div>
+
+  <footer class="foot">© <span id="y"></span> AlertaJobs • Dados protegidos • Pagamento seguro</footer>
+
+  <script>
+    const STRIPE_URL = "https://buy.stripe.com/test_3cIfZj7Pn0Hx1rd4I2gjC00";
+
+    // Ano rodapé
+    document.getElementById('y').textContent = new Date().getFullYear();
+
+    const form = document.getElementById('subscribeForm');
+    const alertBox = document.getElementById('formAlert');
+    const phoneEl = document.getElementById('telefone');
+    const tipoEl = document.getElementById('tipo');
+    const locEl = document.getElementById('localizacao');
+    const iframe = document.getElementById('hidden_iframe');
+
+    // Modal elements
+    const modal = document.getElementById('modalBackdrop');
+    const mIntro = document.getElementById('mIntro');
+    const mClose = document.getElementById('mClose');
+    const payNow = document.getElementById('payNow');
+    const countEl = document.getElementById('count');
+
+    // Máscara simples
+    phoneEl.addEventListener('input', () => {
+      let v = phoneEl.value.replace(/\D/g, '').slice(0, 13);
+      if (v.length > 2) v = v.replace(/^(\d{2})(\d)/, '$1 $2');
+      if (v.length > 8) v = v.replace(/^(\d{2})\s(\d{4,5})(\d)/, '$1 $2-$3');
+      phoneEl.value = v;
     });
-    cidadeSelect.insertAdjacentHTML('afterbegin', '<option value="">Selecione a cidade</option>');
-    cidadeSelect.disabled = false;
-  } else {
-    cidadeSelect.innerHTML = '<option value="">Selecione o estado primeiro</option>';
-    cidadeSelect.disabled = true;
-  }
-});
-document.getElementById('cidade').disabled = true;
 
-// Mensagem de finalização após envio
-document.querySelector('form').addEventListener('submit', function(e) {
-  e.preventDefault();
-  const form = this;
-  const data = new FormData(form);
-  fetch(form.action, {
-    method: 'POST',
-    body: data
-  })
-  .then(response => {
-    if (response.ok) {
-      document.getElementById('mensagem-finalizacao').textContent = 'Inscrição realizada com sucesso! Você receberá as vagas no WhatsApp.';
-      document.getElementById('mensagem-finalizacao').style.display = 'block';
-      form.reset();
-      document.getElementById('cidade').disabled = true;
-    } else {
-      document.getElementById('mensagem-finalizacao').textContent = 'Ocorreu um erro ao enviar. Tente novamente.';
-      document.getElementById('mensagem-finalizacao').style.display = 'block';
+    // Localização obrigatória se não for Remoto
+    function locationRequirement(){
+      if (tipoEl.value && tipoEl.value !== 'Remoto') {
+        locEl.setAttribute('required','required');
+      } else {
+        locEl.removeAttribute('required');
+      }
     }
-  })
-  .catch(() => {
-    document.getElementById('mensagem-finalizacao').textContent = 'Ocorreu um erro ao enviar. Tente novamente.';
-    document.getElementById('mensagem-finalizacao').style.display = 'block';
-  });
-});
-</script>
+    tipoEl.addEventListener('change', locationRequirement);
+    locationRequirement();
+
+    let submitted = false;
+
+    iframe.addEventListener('load', () => {
+      if (!submitted) return; // ignora o primeiro load
+      // Sucesso presumido → abre modal e inicia redirecionamento
+      openModal();
+      submitted = false;
+      form.reset();
+    });
+
+    form.addEventListener('submit', (ev) => {
+      // Honeypot
+      if (document.getElementById('hp').value.trim() !== '') {
+        ev.preventDefault();
+        return;
+      }
+
+      const nome = form.nome.value.trim();
+      const telDigits = form.telefone.value.replace(/\D/g, '');
+      const cargo= form.cargo.value.trim();
+      const tipo = form.tipo.value;
+      const nivel= form.nivel_experiencia.value;
+      const loc  = form.localizacao.value.trim();
+
+      if (!nome)         { ev.preventDefault(); return showAlert('Preencha seu nome.', false); }
+      if (telDigits.length < 10){ ev.preventDefault(); return showAlert('Informe um WhatsApp válido.', false); }
+      if (!cargo)        { ev.preventDefault(); return showAlert('Informe seu cargo de interesse.', false); }
+      if (!tipo)         { ev.preventDefault(); return showAlert('Selecione o tipo de vaga.', false); }
+      if (!nivel)        { ev.preventDefault(); return showAlert('Selecione seu nível de experiência.', false); }
+      if (tipo !== 'Remoto' && !loc){ ev.preventDefault(); return showAlert('Informe sua cidade/UF para vagas não remotas.', false); }
+
+      // Normaliza E.164 BR
+      let digits = telDigits;
+      if (!digits.startsWith('55')) digits = '55' + digits;
+      form.telefone.value = digits;
+
+      submitted = true;
+      showAlert('Enviando seus dados com segurança…', true);
+    });
+
+    function showAlert(msg, ok){
+      alertBox.innerHTML = msg;
+      alertBox.className = 'alert ' + (ok ? 'ok' : 'err');
+      alertBox.style.display = 'block';
+      if (ok) setTimeout(()=>{ alertBox.style.display='none'; }, 4000);
+      alertBox.scrollIntoView({behavior:'smooth', block:'center'});
+    }
+
+    function nextRunLabel(){
+      // janelas 08,12,16,19 (horário local do navegador)
+      const now = new Date();
+      const hours = [8,12,16,19];
+      let next = new Date(now);
+      for (const h of hours){
+        const d = new Date(now);
+        d.setHours(h,0,0,0);
+        if (d > now) { next = d; break; }
+      }
+      // se já passou de 19h, amanhã 08h
+      if (next.getTime() === now.getTime() || next <= now){
+        next = new Date(now); next.setDate(now.getDate()+1); next.setHours(8,0,0,0);
+      }
+      const dd = String(next.getDate()).padStart(2,'0');
+      const mm = String(next.getMonth()+1).padStart(2,'0');
+      const hh = String(next.getHours()).padStart(2,'0');
+      const min= String(next.getMinutes()).padStart(2,'0');
+      return `${dd}/${mm} ${hh}:${min}`;
+    }
+
+    function openModal(){
+      const maskedPhone = form.telefone.value.replace(/^55(\d{2})(\d+)(\d{4})$/, '+55 ($1) $2-$3');
+      mIntro.innerHTML =
+        `Perfeito! Vamos ativar o número <b>${maskedPhone || 'seu WhatsApp'}</b> após o pagamento.<br/>
+         Os envios acontecem todos os dias úteis às <b>08:00</b>, <b>12:00</b>, <b>16:00</b> e <b>19:00</b> (BRT).<br/>
+         Você já entra no <b>próximo ciclo</b>: <b>${nextRunLabel()}</b>.`;
+      modal.style.display = 'flex';
+
+      // contador + redirecionamento automático
+      let t = 6;
+      countEl.textContent = t;
+      const tick = setInterval(()=>{
+        t--; countEl.textContent = t;
+        if (t<=0){ clearInterval(tick); window.location.href = STRIPE_URL; }
+      }, 1000);
+
+      // botões
+      mClose.onclick = () => { modal.style.display = 'none'; clearInterval(tick); };
+      payNow.onclick = () => { clearInterval(tick); };
+    }
+
+    // fechar modal tocando fora
+    modal.addEventListener('click', (e)=>{ if(e.target === modal) modal.style.display='none'; });
+  </script>
 </body>
 </html>
